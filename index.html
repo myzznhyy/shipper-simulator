@@ -950,6 +950,30 @@
     </div>
   </div>
 
+  <!-- SHOP MENU MODAL (OPENED INSIDE STORES WHEN PRESSING [E] AT COUNTER) -->
+  <div id="shopMenuModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-400 rounded-3xl max-w-md w-full max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="bg-slate-950 px-4 py-3 flex items-center justify-between border-b border-slate-800 shrink-0 gap-2">
+        <div class="min-w-0">
+          <h3 id="shopMenuTitle" class="text-sm font-black text-amber-300 truncate">🧋 Thực Đơn Cửa Hàng</h3>
+          <p id="shopMenuSub" class="text-[10px] text-slate-400 truncate">Chọn món bạn muốn mua — mỗi món hồi phục chỉ số khác nhau</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span id="shopMenuMoney" class="pixel-font text-lg font-bold text-emerald-400">120.000đ</span>
+          <button id="btnCloseShopMenu" class="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs">Đóng ✕</button>
+        </div>
+      </div>
+
+      <div id="shopMenuVitalsBar" class="grid grid-cols-3 gap-1.5 px-4 py-2 bg-slate-950/70 border-b border-slate-800 text-[10px] text-center font-bold">
+        <div class="bg-slate-900 rounded-lg py-1 text-orange-300">🍖 No: <span id="shopStatHunger">100%</span></div>
+        <div class="bg-slate-900 rounded-lg py-1 text-sky-300">🥤 Khát: <span id="shopStatThirst">100%</span></div>
+        <div class="bg-slate-900 rounded-lg py-1 text-yellow-300">⚡ Tỉnh: <span id="shopStatEnergy">100%</span></div>
+      </div>
+
+      <div id="shopMenuItemsList" class="flex-1 overflow-y-auto phone-scroll p-3 space-y-2"></div>
+    </div>
+  </div>
+
   <!-- ======================================================================= -->
   <!-- MAIN MENU OVERLAY ("BROTHER HAI'S PHO RESTAURANT" STYLE FOR ANH GRAB!)  -->
   <!-- ======================================================================= -->
@@ -1381,7 +1405,7 @@
       { id: 'food1', type: 'food', name: 'Nhà Hàng Cơm Tấm Ánh Sao', x: 5150, y: 6880, lotX: 5060, lotY: 6810, lotW: 180, lotH: 155, roadSide: 'top', radius: 84, color: '#f97316', icon: '🍱', prompt: 'Ăn cơm tấm + Trà đá no nê (18.000đ)' },
       { id: 'food2', type: 'food', name: 'Hải Sản & Dừa Tươi Bãi Biển', x: 7360, y: 14560, lotX: 7270, lotY: 14485, lotW: 180, lotH: 155, roadSide: 'top', radius: 84, color: '#f97316', icon: '🥥', prompt: 'Ăn hải sản & Uống dừa tươi bãi biển (20.000đ)' },
       { id: 'garage1', type: 'garage', name: 'Gara Độ Xe & Bảo Dưỡng Nova', x: 5800, y: 6880, lotX: 5710, lotY: 6810, lotW: 180, lotH: 155, roadSide: 'top', radius: 86, color: '#eab308', icon: '🔧', prompt: 'Sửa xe 100% & Mở Gara Độ Xe (15.000đ)' },
-      { id: 'rest1', type: 'rest', name: 'Lều Nghỉ Mát Bãi Biển Nắng Vàng', x: 3520, y: 14560, lotX: 3430, lotY: 14485, lotW: 180, lotH: 155, roadSide: 'top', radius: 86, color: '#6366f1', icon: '🛌', prompt: 'Nằm ghế dài bãi biển hồi 100% Tỉnh táo (Miễn phí)' }
+      { id: 'rest1', type: 'rest', name: 'Lều Nghỉ Mát Bãi Biển Nắng Vàng', x: 3520, y: 14560, lotX: 3430, lotY: 14485, lotW: 180, lotH: 155, roadSide: 'top', radius: 86, color: '#6366f1', icon: '🛌', prompt: 'Thuê ghế dài & nước mát bãi biển hồi 100% Tỉnh táo (10.000đ)' }
     ];
 
     // =========================================================================
@@ -1717,6 +1741,8 @@
       pendingAccident: null,
       solidStructures: [],
       activeShop: null,
+      activeShopMenu: null,
+      enteredIntersections: {},
       dialerNumber: '',
       dialerCalling: false,
       dialerCallTimeout: null,
@@ -3431,6 +3457,165 @@
       return !!sz && ['clothing', 'milktea', 'fastfood', 'food', 'garage'].includes(sz.type);
     }
 
+    // Exact 1:1 visible building rect inside a Service Zone lot (matches rendered walls!)
+    function getShopBuildingRect(sz) {
+      if (!sz || !sz.lotX) return null;
+      const bx = sz.lotX + 14;
+      const bw = sz.lotW - 28;
+      if (isEnterableShopZone(sz)) {
+        if (sz.roadSide === 'top') {
+          return { x: bx, y: sz.lotY + 34, w: bw, h: sz.lotH - 46 };
+        }
+        return { x: bx, y: sz.lotY + 12, w: bw, h: sz.lotH - 46 };
+      }
+      if (sz.type === 'gas') {
+        const rearY = sz.roadSide === 'top' ? (sz.lotY + sz.lotH - 54) : (sz.lotY + 12);
+        return { x: sz.lotX + 28, y: rearY, w: sz.lotW - 56, h: 42 };
+      }
+      return null; // rest1 is an open beach canopy/loungers
+    }
+
+    // Exact 1:1 visible building rect for Landmark structures
+    function getLandmarkBuildingRect(lm) {
+      if (!lm || !lm.lotX || lm.id === 'lm_home') return null;
+      if (lm.bStyle === 'plaza' || lm.bStyle === 'camp') {
+        // Open courtyard / campsite: only central fountain / tent is solid
+        return { x: lm.lotX + lm.lotW * 0.28, y: lm.lotY + lm.lotH * 0.26, w: lm.lotW * 0.44, h: lm.lotH * 0.44 };
+      }
+      return { x: lm.lotX + 14, y: lm.lotY + 14, w: lm.lotW - 28, h: lm.lotH - 28 };
+    }
+
+    const SHOP_MENUS = {
+      milktea: [
+        { id: 'mt_trachanh', name: 'Trà Chanh Giả Nhiệt Mát Lạnh', icon: '🍋', price: 8000, thirst: 35, hunger: 0, energy: 8, desc: '+35% Khát • +8% Tỉnh táo' },
+        { id: 'mt_truyenthong', name: 'Trà Sữa Mây Hồng Truyền Thống', icon: '🧋', price: 15000, thirst: 65, hunger: 12, energy: 15, gfQuest: 'milktea', desc: '+65% Khát • +12% No • +15% Tỉnh táo (Quà NY)' },
+        { id: 'mt_tranchau', name: 'Trà Sữa Trân Châu Đường Đen Full Topping', icon: '🧋', price: 24000, thirst: 95, hunger: 32, energy: 25, gfQuest: 'milktea', gfAff: 4, desc: '+95% Khát • +32% No • +25% Tỉnh táo • +4% ❤️ NY' },
+        { id: 'mt_matcha', name: 'Matcha Kem Cheese Đặc Biệt', icon: '🍵', price: 28000, thirst: 85, hunger: 22, energy: 45, gfQuest: 'milktea', desc: '+85% Khát • +22% No • +45% Tỉnh táo' },
+        { id: 'mt_couple', name: 'Combo 2 Ly Đặc Biệt Cho Người Yêu', icon: '💕', price: 34000, thirst: 75, hunger: 20, energy: 30, gfQuest: 'milktea', gfAff: 10, desc: '+75% Khát • +30% Tỉnh táo • +10% ❤️ Tình cảm NY' }
+      ],
+      fastfood: [
+        { id: 'ff_fries', name: 'Khoai Tây Chiên Lắc Phô Mai', icon: '🍟', price: 12000, hunger: 35, thirst: -5, energy: 6, desc: '+35% No bụng • +6% Tỉnh táo' },
+        { id: 'ff_burger', name: 'Burger Bò Phô Mai 2 Tầng', icon: '🍔', price: 22000, hunger: 72, thirst: 0, energy: 14, gfQuest: 'fastfood', desc: '+72% No bụng • +14% Tỉnh táo (Chiều lòng NY)' },
+        { id: 'ff_chicken', name: 'Gà Rán Giòn Cay (2 Miếng)', icon: '🍗', price: 26000, hunger: 85, thirst: 5, energy: 20, gfQuest: 'fastfood', gfAff: 4, desc: '+85% No bụng • +20% Tỉnh táo • +4% ❤️ NY' },
+        { id: 'ff_combo', name: 'Combo Siêu No (Gà Rán + Burger + Pepsi)', icon: '🥤', price: 36000, hunger: 100, thirst: 60, energy: 30, gfQuest: 'fastfood', gfAff: 6, desc: '+100% No • +60% Khát • +30% Tỉnh táo' },
+        { id: 'ff_soda', name: 'Pepsi Tươi Size L + Đá Viên', icon: '🥤', price: 10000, hunger: 0, thirst: 55, energy: 20, desc: '+55% Khát • +20% Tỉnh táo' }
+      ],
+      food_street: [
+        { id: 'fd_trada', name: 'Trà Đá Chanh Mát', icon: '🧊', price: 6000, hunger: 0, thirst: 35, energy: 5, desc: '+35% Khát • +5% Tỉnh táo' },
+        { id: 'fd_comsuon', name: 'Cơm Tấm Sườn Nướng Mật Ong', icon: '🍛', price: 20000, hunger: 75, thirst: 5, energy: 12, desc: '+75% No bụng • +12% Tỉnh táo' },
+        { id: 'fd_dacbiet', name: 'Cơm Tấm Sườn Bì Chả Trứng Ốp La', icon: '🍱', price: 28000, hunger: 100, thirst: 10, energy: 24, desc: '+100% No bụng • +10% Khát • +24% Tỉnh táo' },
+        { id: 'fd_canhchua', name: 'Canh Chua Cá Lóc + Cơm Nóng', icon: '🍲', price: 25000, hunger: 82, thirst: 32, energy: 18, desc: '+82% No bụng • +32% Khát • +18% Tỉnh táo' },
+        { id: 'fd_caphe', name: 'Cà Phê Sữa Đá Pha Phin', icon: '☕', price: 15000, hunger: 5, thirst: 35, energy: 55, desc: '+35% Khát • +55% Tỉnh táo chạy đêm' }
+      ],
+      food_beach: [
+        { id: 'fb_dua', name: 'Dừa Tươi Bãi Biển Ướp Lạnh', icon: '🥥', price: 14000, hunger: 10, thirst: 75, energy: 22, desc: '+75% Khát • +10% No • +22% Tỉnh táo' },
+        { id: 'fb_muc', name: 'Mực Nướng Muối Ớt Cay Nồng', icon: '🦑', price: 28000, hunger: 70, thirst: 0, energy: 18, desc: '+70% No bụng • +18% Tỉnh táo' },
+        { id: 'fb_lau', name: 'Lẩu Hải Sản Chua Cay Nồi Lớn', icon: '🍲', price: 45000, hunger: 100, thirst: 45, energy: 35, desc: '+100% No • +45% Khát • +35% Tỉnh táo' },
+        { id: 'fb_tomhum', name: 'Tôm Hùm Nướng Bơ Tỏi Hảo Hạng', icon: '🦞', price: 65000, hunger: 100, thirst: 20, energy: 50, gfAff: 12, desc: '+100% No • +50% Tỉnh táo • +12% ❤️ NY' }
+      ],
+      garage: [
+        { id: 'gr_oil', name: 'Thay Nhớt & Bảo Dưỡng Nhẹ', icon: '🛢️', price: 8000, durability: 45, desc: '+45% Độ bền xe' },
+        { id: 'gr_repair', name: 'Đại Tu Phục Hồi Xe 100%', icon: '🔧', price: 15000, durability: 100, desc: 'Hồi đầy 100% Độ bền xe' },
+        { id: 'gr_fuel', name: 'Đổ Đầy Bình Xăng Tận Nơi', icon: '⛽', price: 15000, fuel: 100, desc: 'Hồi đầy 100% Bình xăng' },
+        { id: 'gr_open_app', name: 'Mở Bảng Nâng Cấp & Mua Xe VIP', icon: '🚗', price: 0, openGaragePhone: true, desc: 'Xem các dòng xe & linh kiện độ trên Điện thoại' }
+      ]
+    };
+
+    function getMenuItemsForShop(sz) {
+      if (!sz) return [];
+      if (sz.type === 'milktea') return SHOP_MENUS.milktea;
+      if (sz.type === 'fastfood') return SHOP_MENUS.fastfood;
+      if (sz.type === 'garage') return SHOP_MENUS.garage;
+      if (sz.id === 'food2') return SHOP_MENUS.food_beach;
+      return SHOP_MENUS.food_street;
+    }
+
+    function openShopMenuModal(sz) {
+      if (!sz) return;
+      Sound.click();
+      state.activeShopMenu = sz;
+      document.getElementById('shopMenuModal').classList.remove('hidden');
+      renderShopMenuModal();
+    }
+
+    function closeShopMenuModal() {
+      Sound.click();
+      state.activeShopMenu = null;
+      document.getElementById('shopMenuModal').classList.add('hidden');
+      updateHUD();
+    }
+
+    function renderShopMenuModal() {
+      const sz = state.activeShopMenu;
+      if (!sz) return;
+      document.getElementById('shopMenuTitle').textContent = `${sz.icon} Thực Đơn: ${sz.name}`;
+      document.getElementById('shopMenuSub').textContent = 'Chọn món muốn mua — mỗi món có giá và mức hồi phục khác nhau';
+      document.getElementById('shopMenuMoney').textContent = formatVND(state.money);
+
+      const bar = document.getElementById('shopMenuVitalsBar');
+      if (sz.type === 'garage') {
+        bar.innerHTML = `
+          <div class="bg-slate-900 rounded-lg py-1 text-emerald-300">🔧 Độ bền: <span>${Math.round(state.durability)}%</span></div>
+          <div class="bg-slate-900 rounded-lg py-1 text-rose-300">⛽ Xăng: <span>${Math.round(state.fuel)}%</span></div>
+          <div class="bg-slate-900 rounded-lg py-1 text-yellow-300">⚡ Tỉnh: <span>${Math.round(state.energy)}%</span></div>
+        `;
+      } else {
+        bar.innerHTML = `
+          <div class="bg-slate-900 rounded-lg py-1 text-orange-300">🍖 No: <span>${Math.round(state.hunger)}%</span></div>
+          <div class="bg-slate-900 rounded-lg py-1 text-sky-300">🥤 Khát: <span>${Math.round(state.thirst)}%</span></div>
+          <div class="bg-slate-900 rounded-lg py-1 text-yellow-300">⚡ Tỉnh: <span>${Math.round(state.energy)}%</span></div>
+        `;
+      }
+
+      const list = document.getElementById('shopMenuItemsList');
+      const items = getMenuItemsForShop(sz);
+      list.innerHTML = items.map(item => `
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-2.5 flex items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl shrink-0">${item.icon}</div>
+            <div class="min-w-0">
+              <div class="text-xs font-extrabold text-white truncate">${item.name}</div>
+              <div class="text-[10px] text-slate-400 leading-tight mt-0.5">${item.desc}</div>
+            </div>
+          </div>
+          <button data-sitem="${item.id}" class="shop-buy-btn shrink-0 px-3 py-1.5 rounded-xl ${item.openGaragePhone ? 'bg-sky-400 hover:bg-sky-300' : 'bg-emerald-500 hover:bg-emerald-400'} text-slate-950 font-black text-[11px]">
+            ${item.openGaragePhone ? 'Mở Gara' : formatVND(item.price)}
+          </button>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.shop-buy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = items.find(x => x.id === btn.dataset.sitem);
+          if (!item) return;
+          if (item.openGaragePhone) {
+            closeShopMenuModal();
+            togglePhone(true, false);
+            switchPhoneApp('garage');
+            return;
+          }
+          if (state.money < item.price) {
+            showToast(`Ví không đủ ${formatVND(item.price)} để mua "${item.name}"!`, 'danger');
+            return;
+          }
+          state.money -= item.price;
+          if (item.hunger) state.hunger = Math.max(0, Math.min(100, state.hunger + item.hunger));
+          if (item.thirst) state.thirst = Math.max(0, Math.min(100, state.thirst + item.thirst));
+          if (item.energy) state.energy = Math.max(0, Math.min(100, state.energy + item.energy));
+          if (item.durability) state.durability = Math.min(100, state.durability + item.durability);
+          if (item.fuel) state.fuel = Math.min(100, state.fuel + item.fuel);
+          if (item.gfQuest) CompleteGfQuestHelper(item.gfQuest);
+          if (item.gfAff && state.girlfriend) {
+            state.girlfriend.affection = Math.min(100, state.girlfriend.affection + item.gfAff);
+          }
+          Sound.cash();
+          showToast(`${item.icon} Đã mua "${item.name}" (-${formatVND(item.price)})!`, 'success');
+          renderShopMenuModal();
+          updateHUD();
+        });
+      });
+    }
+
     function getShopInteriorConfig(sz) {
       const baseWalls = [
         { x: 0, y: 0, w: 640, h: 18 },
@@ -3448,23 +3633,23 @@
         npcShirt = '#ec4899';
       } else if (sz.type === 'milktea') {
         floorCol = '#4c0519'; rugCol = '#9d174d';
-        counterTitle = 'Quầy Pha Chế Trà Sữa';
-        counterPrompt = 'Bấm [E] mua Trà Sữa Mây Hồng (15.000đ • Tặng NY & Hồi Khát)';
+        counterTitle = 'Quầy Order Trà Sữa Mây Hồng';
+        counterPrompt = 'Bấm [E] mở Thực Đơn chọn Trà Sữa & Đồ Uống';
         npcShirt = '#f472b6';
       } else if (sz.type === 'fastfood') {
         floorCol = '#450a0a'; rugCol = '#991b1b';
         counterTitle = 'Quầy Order NovaBurger';
-        counterPrompt = 'Bấm [E] mua Combo Gà Rán & Burger (22.000đ • No & Chiều NY)';
+        counterPrompt = 'Bấm [E] mở Thực Đơn chọn Gà Rán, Burger & Combo';
         npcShirt = '#facc15';
       } else if (sz.type === 'food') {
         floorCol = '#431407'; rugCol = '#9a3412';
-        counterTitle = 'Quầy Bếp Nhà Hàng';
-        counterPrompt = 'Bấm [E] gọi Cơm / Hải Sản ngon lành (18.000đ)';
+        counterTitle = 'Quầy Gọi Món Nhà Hàng';
+        counterPrompt = 'Bấm [E] mở Thực Đơn chọn Món Ăn & Thức Uống';
         npcShirt = '#f97316';
       } else if (sz.type === 'garage') {
         floorCol = '#0f172a'; rugCol = '#334155';
         counterTitle = 'Quầy Kỹ Thuật & Độ Xe';
-        counterPrompt = 'Bấm [E] Đại tu xe 100% (15.000đ) & Mở Gara Độ Xe';
+        counterPrompt = 'Bấm [E] mở Bảng Dịch Vụ Sửa Xe & Đổ Xăng';
         npcShirt = '#eab308';
       }
       return {
@@ -3929,38 +4114,13 @@
       });
 
       for (const sz of SERVICE_ZONES) {
+        const rect = getShopBuildingRect(sz);
         if (isEnterableShopZone(sz)) {
-          if (sz.roadSide === 'top') {
-            sz.doorX = sz.lotX + sz.lotW / 2;
-            sz.doorY = sz.lotY + 20;
-            state.solidStructures.push({
-              x: sz.lotX + 8,
-              y: sz.lotY + 32,
-              w: sz.lotW - 16,
-              h: sz.lotH - 40,
-              name: sz.name
-            });
-          } else {
-            sz.doorX = sz.lotX + sz.lotW / 2;
-            sz.doorY = sz.lotY + sz.lotH - 20;
-            state.solidStructures.push({
-              x: sz.lotX + 8,
-              y: sz.lotY + 8,
-              w: sz.lotW - 16,
-              h: sz.lotH - 40,
-              name: sz.name
-            });
-          }
-        } else if (sz.type === 'gas') {
-          // Gas station kiosk solid at rear; pump apron facing road remains open
-          const rearY = sz.roadSide === 'top' ? (sz.lotY + sz.lotH - 64) : (sz.lotY + 10);
-          state.solidStructures.push({
-            x: sz.lotX + 20,
-            y: rearY,
-            w: sz.lotW - 40,
-            h: 54,
-            name: sz.name
-          });
+          sz.doorX = sz.lotX + sz.lotW / 2;
+          sz.doorY = sz.roadSide === 'top' ? (sz.lotY + 20) : (sz.lotY + sz.lotH - 20);
+        }
+        if (rect) {
+          state.solidStructures.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h, name: sz.name });
         }
       }
 
@@ -3971,13 +4131,10 @@
           lm.lotY < sz.lotY + sz.lotH && lm.lotY + lm.lotH > sz.lotY
         );
         if (overlapsShop) continue;
-        state.solidStructures.push({
-          x: lm.lotX + 12,
-          y: lm.lotY + 12,
-          w: lm.lotW - 24,
-          h: lm.lotH - 28,
-          name: lm.name
-        });
+        const rect = getLandmarkBuildingRect(lm);
+        if (rect) {
+          state.solidStructures.push({ x: rect.x, y: rect.y, w: rect.w, h: rect.h, name: lm.name });
+        }
       }
     }
 
@@ -4107,6 +4264,10 @@
       const pred = predictPlayerNextMove();
       if (!pred) return;
       if (Math.hypot(pred.x - state.player.x, pred.y - state.player.y) < 420) return;
+
+      const blocked = state.buildings.some(b => pred.x + 20 > b.x && pred.x - 20 < b.x + b.w && pred.y + 20 > b.y && pred.y - 20 < b.y + b.h) ||
+        state.solidStructures.some(s => pred.x + 20 > s.x && pred.x - 20 < s.x + s.w && pred.y + 20 > s.y && pred.y - 20 < s.y + s.h);
+      if (blocked) return;
 
       // Reuse existing expired/far ambush cop or keep max 2 predictive ambush units
       let ambushCops = state.police.filter(c => c.ambush);
@@ -5263,49 +5424,22 @@
       if (z.type === 'clothing') {
         openWardrobeModal(true);
         return;
-      } else if (z.type === 'milktea') {
-        if (state.money < 15000) { showToast('Cần 15.000đ để mua Trà Sữa Mây Hồng!', 'danger'); return; }
-        state.money -= 15000;
-        state.thirst = 100;
-        state.energy = Math.min(100, state.energy + 25);
-        CompleteGfQuestHelper('milktea');
-        Sound.cash();
-        showToast('🧋 Đã mua Trà Sữa Mây Hồng mát lạnh! (+100% Khát, +25% Tỉnh táo)', 'success');
-      } else if (z.type === 'fastfood') {
-        if (state.money < 22000) { showToast('Cần 22.000đ để mua Combo Gà Rán NovaBurger!', 'danger'); return; }
-        state.money -= 22000;
-        state.hunger = 100;
-        state.thirst = Math.min(100, state.thirst + 40);
-        CompleteGfQuestHelper('fastfood');
-        Sound.cash();
-        showToast('🍔 Đã thưởng thức Combo Gà Rán & Burger giòn rụm! (+100% No bụng)', 'success');
+      } else if (['milktea', 'fastfood', 'food', 'garage'].includes(z.type)) {
+        openShopMenuModal(z);
+        return;
       } else if (z.type === 'gas') {
         if (state.money < 15000) { showToast('Cần 15.000đ để đổ đầy bình xăng!', 'danger'); return; }
         state.money -= 15000;
         state.fuel = 100;
         Sound.cash();
-        showToast('⛽ Đã đổ đầy bình xăng 100%!', 'success');
-      } else if (z.type === 'food') {
-        if (state.money < 18000) { showToast('Cần 18.000đ để ăn uống!', 'danger'); return; }
-        state.money -= 18000;
-        state.hunger = 100;
-        state.thirst = 100;
-        state.energy = Math.min(100, state.energy + 25);
-        Sound.cash();
-        showToast('🍱 Đã ăn no uống khỏe 100%!', 'success');
-      } else if (z.type === 'garage') {
-        if (state.durability < 100 && state.money >= 15000) {
-          state.money -= 15000;
-          state.durability = 100;
-          Sound.cash();
-          showToast('🔧 Đã đại tu xe 100% độ bền!', 'success');
-        }
-        togglePhone(true);
-        switchPhoneApp('garage');
+        showToast('⛽ Đã đổ đầy bình xăng 100% (-15.000đ)!', 'success');
       } else if (z.type === 'rest') {
+        if (state.money < 10000) { showToast('Cần 10.000đ để thuê ghế nghỉ mát & uống nước dừa bãi biển!', 'danger'); return; }
+        state.money -= 10000;
         state.timeMinutes += 120;
         state.energy = 100;
-        showToast('🛌 Đã nghỉ trưa hồi phục 100% Tỉnh táo!', 'success');
+        Sound.cash();
+        showToast('🛌 Đã nghỉ mát bãi biển hồi phục 100% Tỉnh táo (-10.000đ)!', 'success');
       }
       updateHUD();
     }
@@ -5744,46 +5878,52 @@
       state.thirst = Math.max(0, state.thirst - 0.24 * dt);
       state.energy = Math.max(0, state.energy - 0.16 * dt);
 
-      // 7. PLAYER RED LIGHT VIOLATION CHECK (-10.000 VNĐ FINE!)
-      if (!state.onFoot && state.redLightCooldown <= 0 && Math.abs(p.speed) > 40) {
-        for (const tl of state.trafficLights) {
-          const dx = Math.abs(p.x - tl.x);
-          const dy = Math.abs(p.y - tl.y);
-          if (dx < ROAD_WIDTH * 0.48 && dy < ROAD_WIDTH * 0.48) {
-            const st = getTrafficLightState(tl);
-            const movingHoriz = Math.abs(p.vx) >= Math.abs(p.vy);
-            const myLight = movingHoriz ? st.horiz : st.vert;
-            if (myLight === 'red') {
-              state.redLightCooldown = 4.0;
-              const fine = 10000; // Phạt đúng 10.000 VNĐ theo yêu cầu!
-              state.money = Math.max(0, state.money - fine);
-              state.rating = Math.max(1.0, Number((state.rating - 0.08).toFixed(2)));
-              Sound.siren();
-              state.cameraShake = 8;
-              addFloatingText(p.x, p.y - 38, '🚨 VƯỢT ĐÈN ĐỎ! -10.000đ', '#ef4444');
-              showToast('🚨 Camera Phạt Nguội & CSGT: Bạn vừa vượt ĐÈN ĐỎ (-10.000 VNĐ)! Mô tô CSGT đang đuổi theo!', 'danger');
+      // 7. PLAYER RED LIGHT VIOLATION CHECK (CHỈ KIỂM TRA LÚC BƯỚC QUA VẠCH DỪNG VÀO NGÃ TƯ!)
+      // Nếu vào giao lộ khi ĐÈN XANH rồi rẽ phải/rẽ trái bên trong giao lộ sẽ KHÔNG bị phạt sai!
+      const stopHalf = ROAD_WIDTH * 0.44;
+      for (const tl of state.trafficLights) {
+        const tlKey = `${tl.x}_${tl.y}`;
+        const inBox = Math.abs(p.x - tl.x) < stopHalf && Math.abs(p.y - tl.y) < stopHalf;
+        if (!inBox) {
+          if (state.enteredIntersections[tlKey]) delete state.enteredIntersections[tlKey];
+          continue;
+        }
 
-              // Trigger CSGT Police Chase (Ý 2)
-              state.policeChase.active = true;
-              state.policeChase.timer = 16.0;
-              state.policeChase.fine = 10000;
-              state.policeChase.reason = 'red_light';
-              const payBtn = document.getElementById('btnPayPoliceFine');
-              if (payBtn) payBtn.textContent = 'NỘP 10K';
-              document.getElementById('policeChaseBanner').classList.remove('hidden');
+        if (!state.enteredIntersections[tlKey]) {
+          // Ghi nhận hướng đường mà xe vừa đi vào giao lộ dựa trên vị trí trước đó (prevX, prevY)
+          const enteredFromHoriz = Math.abs(prevX - tl.x) >= Math.abs(prevY - tl.y);
+          const st = getTrafficLightState(tl);
+          const entryLight = enteredFromHoriz ? st.horiz : st.vert;
+          state.enteredIntersections[tlKey] = { legal: entryLight !== 'red', enteredFromHoriz };
 
-              if (state.livestream.active) {
-                pushLivestreamComment('CSGT_Online', `Bắt quả tang idol vượt đèn đỏ mất 10k, bị CSGT bật còi hú đuổi theo kìa anh em ơi! 🚨😂`, false);
-              }
-              if (state.activeOrder) {
-                state.activeOrder.integrity = Math.max(0, state.activeOrder.integrity - 10);
-                p.speechText = 'Ối vượt đèn đỏ mất 10k rồi!';
-                p.speechTimer = 2.5;
-                updateActiveTripHUD();
-              }
-              updateHUD();
+          if (!state.onFoot && entryLight === 'red' && state.redLightCooldown <= 0 && Math.abs(p.speed) > 45) {
+            state.redLightCooldown = 4.0;
+            const fine = 10000;
+            state.money = Math.max(0, state.money - fine);
+            state.rating = Math.max(1.0, Number((state.rating - 0.08).toFixed(2)));
+            Sound.siren();
+            state.cameraShake = 8;
+            addFloatingText(p.x, p.y - 38, '🚨 VƯỢT ĐÈN ĐỎ! -10.000đ', '#ef4444');
+            showToast('🚨 Camera Phạt Nguội & CSGT: Bạn vừa vượt ĐÈN ĐỎ (-10.000 VNĐ)! Mô tô CSGT đang đuổi theo!', 'danger');
+
+            state.policeChase.active = true;
+            state.policeChase.timer = 16.0;
+            state.policeChase.fine = 10000;
+            state.policeChase.reason = 'red_light';
+            const payBtn = document.getElementById('btnPayPoliceFine');
+            if (payBtn) payBtn.textContent = 'NỘP 10K';
+            document.getElementById('policeChaseBanner').classList.remove('hidden');
+
+            if (state.livestream.active) {
+              pushLivestreamComment('CSGT_Online', `Bắt quả tang idol vượt đèn đỏ mất 10k, bị CSGT bật còi hú đuổi theo kìa anh em ơi! 🚨😂`, false);
             }
-            break;
+            if (state.activeOrder) {
+              state.activeOrder.integrity = Math.max(0, state.activeOrder.integrity - 10);
+              p.speechText = 'Ối vượt đèn đỏ mất 10k rồi!';
+              p.speechTimer = 2.5;
+              updateActiveTripHUD();
+            }
+            updateHUD();
           }
         }
       }
@@ -6005,15 +6145,43 @@
         }
       }
 
+      const isCopBlocked = (cx, cy) => {
+        const cPad = 15;
+        for (const b of state.buildings) {
+          if (cx + cPad > b.x && cx - cPad < b.x + b.w && cy + cPad > b.y && cy - cPad < b.y + b.h) return true;
+        }
+        for (const s of state.solidStructures) {
+          if (cx + cPad > s.x && cx - cPad < s.x + s.w && cy + cPad > s.y && cy - cPad < s.y + s.h) return true;
+        }
+        return false;
+      };
+
       for (const cop of state.police) {
         cop.sirenPhase += dt * 10;
         const dCopP = Math.hypot(cop.x - p.x, cop.y - p.y);
         if (state.policeChase.active && dCopP < 1800) {
           const angToP = Math.atan2(p.y - cop.y, p.x - cop.x);
-          cop.angle = angToP;
-          cop.x += Math.cos(angToP) * 265 * dt;
-          cop.y += Math.sin(angToP) * 265 * dt;
-          if (dCopP < 42) {
+          const stepSpd = 265 * dt;
+          let stepX = Math.cos(angToP) * stepSpd;
+          let stepY = Math.sin(angToP) * stepSpd;
+
+          let moved = false;
+          if (!isCopBlocked(cop.x + stepX, cop.y)) { cop.x += stepX; moved = true; }
+          if (!isCopBlocked(cop.x, cop.y + stepY)) { cop.y += stepY; moved = true; }
+
+          if (!moved) {
+            // Cả 2 hướng bị tường chắn -> né vuông góc men theo đường trống quanh tòa nhà
+            const alt1X = cop.x + Math.cos(angToP + Math.PI / 2) * stepSpd;
+            const alt1Y = cop.y + Math.sin(angToP + Math.PI / 2) * stepSpd;
+            const alt2X = cop.x + Math.cos(angToP - Math.PI / 2) * stepSpd;
+            const alt2Y = cop.y + Math.sin(angToP - Math.PI / 2) * stepSpd;
+            if (!isCopBlocked(alt1X, alt1Y)) { cop.x = alt1X; cop.y = alt1Y; cop.angle = angToP + Math.PI / 2; }
+            else if (!isCopBlocked(alt2X, alt2Y)) { cop.x = alt2X; cop.y = alt2Y; cop.angle = angToP - Math.PI / 2; }
+          } else {
+            cop.angle = angToP;
+          }
+
+          if (Math.hypot(cop.x - p.x, cop.y - p.y) < 42) {
             state.policeChase.active = false;
             document.getElementById('policeChaseBanner').classList.add('hidden');
             const fine = state.policeChase.fine || 10000;
@@ -6025,7 +6193,6 @@
           }
         } else if (cop.ambush) {
           cop.ambushTimer -= dt;
-          // Predictive ambush officer watches oncoming player!
           if (!state.onFoot && dCopP < 165) {
             const kmhNow = Math.abs(p.speed) / 4.5;
             if (kmhNow > 72 && !state.policeChase.active) {
@@ -6046,7 +6213,13 @@
             }
           }
         } else {
-          cop.x += cop.vx * dt;
+          const nextCopX = cop.x + cop.vx * dt;
+          if (!isCopBlocked(nextCopX, cop.y)) {
+            cop.x = nextCopX;
+          } else {
+            cop.vx = -cop.vx;
+            cop.angle = cop.vx >= 0 ? 0 : Math.PI;
+          }
           if (cop.x > cop.maxX) { cop.vx = -Math.abs(cop.speed); cop.angle = Math.PI; }
           if (cop.x < cop.minX) { cop.vx = Math.abs(cop.speed); cop.angle = 0; }
         }
@@ -6728,103 +6901,134 @@
 
     function drawPlayerOutdoorHouse(g) {
       const h = PLAYER_HOME_OUTDOOR;
+      const bx = h.lotX + 16, by = h.lotY + 12, bw = h.lotW - 32, bh = 92;
       g.save();
+      // Grass lawn & stone courtyard path
       g.fillStyle = '#15803d';
       g.fillRect(h.lotX, h.lotY, h.lotW, h.lotH);
-      g.fillStyle = '#334155';
-      g.fillRect(h.doorX - 36, h.lotY + 80, 72, h.lotH - 60);
-      g.fillStyle = '#7c2d12';
-      g.fillRect(h.lotX + 16, h.lotY + 12, h.lotW - 32, 92);
-      g.fillStyle = '#b91c1c';
-      g.fillRect(h.lotX + 22, h.lotY + 18, h.lotW - 44, 80);
+      g.strokeStyle = '#22c55e';
+      g.lineWidth = 2;
+      g.strokeRect(h.lotX, h.lotY, h.lotW, h.lotH);
+      g.fillStyle = '#475569';
+      g.fillRect(h.doorX - 36, by + bh, 72, (h.lotY + h.lotH) - (by + bh) + 12);
+      g.fillStyle = '#94a3b8';
+      g.fillRect(h.doorX - 24, by + bh + 4, 48, 28);
 
-      const pulse = 24 + Math.sin(Date.now() * 0.006) * 4;
+      // House shadow & walls (exact 1:1 with solidStructures!)
+      g.fillStyle = 'rgba(0,0,0,0.42)';
+      g.fillRect(bx + 7, by + 7, bw, bh);
+      g.fillStyle = '#f1f5f9';
+      g.fillRect(bx, by, bw, bh);
+
+      // Pitched terracotta roof + ridge + solar panel
+      g.fillStyle = '#991b1b';
+      g.fillRect(bx + 4, by + 4, bw - 8, bh - 12);
+      g.fillStyle = '#dc2626';
+      g.fillRect(bx + 8, by + 8, bw - 16, bh - 24);
+      g.fillStyle = '#fbbf24';
+      g.fillRect(bx + 10, by + bh / 2 - 4, bw - 20, 4); // roof ridge
+      g.fillStyle = '#1e3a8a';
+      g.fillRect(bx + bw - 50, by + 12, 32, 20); // solar panel
+      g.strokeStyle = '#60a5fa';
+      g.lineWidth = 1;
+      g.strokeRect(bx + bw - 50, by + 12, 32, 20);
+
+      // Porch awning & front wooden door + potted shrubs
+      g.fillStyle = '#10b981';
+      g.fillRect(h.doorX - 24, by + bh - 8, 48, 10);
+      g.fillStyle = '#78350f';
+      g.fillRect(h.doorX - 14, by + bh - 4, 28, 6);
+      g.fillStyle = '#16a34a';
+      g.beginPath(); g.arc(bx + 12, by + bh + 8, 8, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(bx + bw - 12, by + bh + 8, 8, 0, Math.PI * 2); g.fill();
+
+      const pulse = 22 + Math.sin(Date.now() * 0.006) * 4;
       g.beginPath();
       g.arc(h.doorX, h.doorY, pulse, 0, Math.PI * 2);
-      g.fillStyle = 'rgba(52, 211, 153, 0.35)';
+      g.fillStyle = 'rgba(52, 211, 153, 0.32)';
       g.fill();
       g.strokeStyle = '#10b981';
       g.lineWidth = 2.5;
       g.stroke();
 
       g.fillStyle = 'rgba(15, 23, 42, 0.92)';
-      g.fillRect(h.lotX + 14, h.lotY + 6, h.lotW - 28, 22);
-      g.font = 'bold 11px Inter, sans-serif';
+      g.fillRect(bx + 6, by + 5, bw - 12, 20);
+      g.font = 'bold 10px Inter, sans-serif';
       g.textAlign = 'center';
       g.fillStyle = '#4ade80';
-      g.fillText('🏡 NHÀ CỦA BẠN (Bấm [E] vào nhà)', h.lotX + h.lotW / 2, h.lotY + 21);
+      g.fillText('🏡 NHÀ CỦA BẠN [E]', h.lotX + h.lotW / 2, by + 19);
       g.restore();
     }
 
-    // Draws custom dedicated storefront buildings for Landmarks & Service Shops
+    // Draws custom dedicated storefront buildings for Landmarks (exact 1:1 with getLandmarkBuildingRect!)
     function drawLandmarkStorefront(g, lm) {
       if (!lm.lotX || lm.id === 'lm_home') return;
-      const { lotX, lotY, lotW, lotH, bStyle, color, icon, name } = lm;
-      g.save();
-      g.fillStyle = 'rgba(0,0,0,0.45)';
-      g.fillRect(lotX + 10, lotY + 10, lotW, lotH);
+      // Shops with interactive ServiceZones are rendered cleanly by drawServiceStationLot so there's zero double-draw mismatch
+      if (['clothing', 'milktea', 'fastfood'].includes(lm.bStyle)) return;
 
+      const { lotX, lotY, lotW, lotH, bStyle, color, icon, name } = lm;
+      const rect = getLandmarkBuildingRect(lm) || { x: lotX + 14, y: lotY + 14, w: lotW - 28, h: lotH - 28 };
+      const { x: bx, y: by, w: bw, h: bh } = rect;
+      const cx = bx + bw / 2;
+      const cy = by + bh / 2;
+      g.save();
+
+      // Paved plaza / lot apron
       g.fillStyle = '#1e293b';
       g.fillRect(lotX, lotY, lotW, lotH);
-      g.strokeStyle = color;
-      g.lineWidth = 3;
+      g.fillStyle = '#334155';
+      g.fillRect(lotX + 4, lotY + 4, lotW - 8, lotH - 8);
+      g.strokeStyle = color + '88';
+      g.lineWidth = 2;
       g.strokeRect(lotX, lotY, lotW, lotH);
 
+      // Building shadow on apron (exact solid footprint at bx, by, bw, bh)
+      g.fillStyle = 'rgba(0,0,0,0.45)';
+      g.fillRect(bx + 8, by + 8, bw, bh);
+
       if (bStyle === 'eiffel') {
-        // Grand Eiffel Tower Plaza & Iron Lattice Tower
-        g.fillStyle = '#451a03';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
-        const cx = lotX + lotW / 2;
-        const cy = lotY + lotH / 2 + 12;
-        // 4 Iron Footings
+        g.fillStyle = '#292524';
+        g.fillRect(bx, by, bw, bh);
         g.fillStyle = '#b45309';
-        g.fillRect(cx - 56, cy - 46, 26, 26);
-        g.fillRect(cx + 30, cy - 46, 26, 26);
-        g.fillRect(cx - 56, cy + 20, 26, 26);
-        g.fillRect(cx + 30, cy + 20, 26, 26);
-        // Lattice X-Girders
+        g.fillRect(bx + 10, by + 10, 26, 26);
+        g.fillRect(bx + bw - 36, by + 10, 26, 26);
+        g.fillRect(bx + 10, by + bh - 36, 26, 26);
+        g.fillRect(bx + bw - 36, by + bh - 36, 26, 26);
         g.strokeStyle = '#d97706';
         g.lineWidth = 5;
         g.beginPath();
-        g.moveTo(cx - 45, cy - 35); g.lineTo(cx + 45, cy + 35);
-        g.moveTo(cx + 45, cy - 35); g.lineTo(cx - 45, cy + 35);
+        g.moveTo(bx + 18, by + 18); g.lineTo(bx + bw - 18, by + bh - 18);
+        g.moveTo(bx + bw - 18, by + 18); g.lineTo(bx + 18, by + bh - 18);
         g.stroke();
-        // Observation Decks (Tier 1, 2, Spire)
         g.fillStyle = '#92400e';
-        g.fillRect(cx - 38, cy - 38, 76, 76);
+        g.fillRect(cx - 34, cy - 34, 68, 68);
         g.strokeStyle = '#fbbf24';
         g.lineWidth = 2;
-        g.strokeRect(cx - 38, cy - 38, 76, 76);
-        g.fillStyle = '#b45309';
-        g.fillRect(cx - 22, cy - 22, 44, 44);
-        g.strokeRect(cx - 22, cy - 22, 44, 44);
-        // Golden Beacon Tip
+        g.strokeRect(cx - 34, cy - 34, 68, 68);
         g.fillStyle = '#fef08a';
-        g.beginPath(); g.arc(cx, cy, 10 + Math.sin(Date.now() * 0.008) * 3, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(cx, cy, 9 + Math.sin(Date.now() * 0.008) * 3, 0, Math.PI * 2); g.fill();
       } else if (bStyle === 'pagoda') {
-        // Traditional Multi-Tiered Crimson & Gold Pagoda
         g.fillStyle = '#78350f';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
+        g.fillRect(bx, by, bw, bh);
         g.fillStyle = '#dc2626';
-        g.fillRect(lotX + 20, lotY + 34, lotW - 40, lotH - 48);
+        g.fillRect(bx + 8, by + 8, bw - 16, bh - 16);
         g.strokeStyle = '#facc15';
         g.lineWidth = 3;
-        g.strokeRect(lotX + 20, lotY + 34, lotW - 40, lotH - 48);
+        g.strokeRect(bx + 8, by + 8, bw - 16, bh - 16);
         g.fillStyle = '#991b1b';
-        g.fillRect(lotX + 38, lotY + 50, lotW - 76, lotH - 80);
-        g.strokeRect(lotX + 38, lotY + 50, lotW - 76, lotH - 80);
+        g.fillRect(bx + 26, by + 24, bw - 52, bh - 48);
+        g.strokeRect(bx + 26, by + 24, bw - 52, bh - 48);
+        g.fillStyle = '#facc15';
+        g.beginPath(); g.arc(cx, cy, 8, 0, Math.PI * 2); g.fill();
       } else if (bStyle === 'opera') {
-        // White Shell Opera House over Water Pool
-        g.fillStyle = '#0284c7';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
-        const cx = lotX + lotW / 2;
-        const cy = lotY + lotH / 2 + 10;
+        g.fillStyle = '#0369a1';
+        g.fillRect(bx, by, bw, bh);
         g.fillStyle = '#f8fafc';
         for (const offX of [-36, 0, 36]) {
           g.beginPath();
-          g.moveTo(cx + offX, cy - 42);
-          g.lineTo(cx + offX - 28, cy + 36);
-          g.lineTo(cx + offX + 28, cy + 36);
+          g.moveTo(cx + offX, cy - 38);
+          g.lineTo(cx + offX - 26, cy + 32);
+          g.lineTo(cx + offX + 26, cy + 32);
           g.closePath();
           g.fill();
           g.strokeStyle = '#38bdf8';
@@ -6832,98 +7036,188 @@
           g.stroke();
         }
       } else if (bStyle === 'stadium') {
-        // Grand Oval Soccer Stadium
-        const cx = lotX + lotW / 2;
-        const cy = lotY + lotH / 2 + 8;
         g.fillStyle = '#475569';
-        g.beginPath(); g.ellipse(cx, cy, lotW * 0.44, lotH * 0.38, 0, 0, Math.PI * 2); g.fill();
+        g.fillRect(bx, by, bw, bh);
         g.fillStyle = '#16a34a';
-        g.beginPath(); g.ellipse(cx, cy, lotW * 0.32, lotH * 0.26, 0, 0, Math.PI * 2); g.fill();
+        g.fillRect(bx + 18, by + 18, bw - 36, bh - 36);
         g.strokeStyle = '#ffffff';
         g.lineWidth = 2;
-        g.strokeRect(cx - 42, cy - 26, 84, 52);
-        g.beginPath(); g.arc(cx, cy, 12, 0, Math.PI * 2); g.stroke();
-      } else if (bStyle === 'milktea') {
-        // Pink Boba Milk Tea Storefront
-        g.fillStyle = '#831843';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
-        g.fillStyle = '#f472b6';
-        g.fillRect(lotX + 16, lotY + 16, lotW - 32, 46);
-        g.fillStyle = '#fbcfe8';
-        for (let i = 0; i < lotW - 36; i += 24) {
-          g.fillRect(lotX + 18 + i, lotY + 56, 12, 10);
-        }
-      } else if (bStyle === 'clothing') {
-        // Fashion Boutique Storefront
-        g.fillStyle = '#3b0764';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
-        g.fillStyle = '#ec4899';
-        g.fillRect(lotX + 16, lotY + 16, lotW - 32, 44);
-        g.fillStyle = '#38bdf8';
-        g.fillRect(lotX + 24, lotY + 75, lotW - 48, 45);
-      } else if (bStyle === 'fastfood') {
-        // Red & Yellow Burger / Fried Chicken Restaurant
-        g.fillStyle = '#991b1b';
-        g.fillRect(lotX + 10, lotY + 10, lotW - 20, lotH - 20);
+        g.strokeRect(bx + 24, by + 24, bw - 48, bh - 48);
+        g.beginPath(); g.moveTo(cx, by + 24); g.lineTo(cx, by + bh - 24); g.stroke();
+        g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.stroke();
+      } else if (bStyle === 'hospital') {
+        // White & Red Medical Complex with Rooftop Cross + Helipad
+        g.fillStyle = '#f8fafc';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#cbd5e1';
+        g.fillRect(bx + 6, by + 6, bw - 12, bh - 12);
         g.fillStyle = '#ef4444';
-        g.fillRect(lotX + 16, lotY + 16, lotW - 32, 50);
-        g.fillStyle = '#facc15';
-        g.fillRect(lotX + 20, lotY + 34, lotW - 40, 12);
-      } else {
+        g.fillRect(cx - 24, cy - 7, 48, 14);
+        g.fillRect(cx - 7, cy - 24, 14, 48);
+        g.fillStyle = '#0ea5e9';
+        g.fillRect(bx + 10, by + bh - 10, bw - 20, 8);
+      } else if (bStyle === 'school') {
+        // U-shaped Academy Roof with Central Courtyard
+        g.fillStyle = '#eab308';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#fef9c3';
+        g.fillRect(bx + 24, by + 28, bw - 48, bh - 36);
+        g.fillStyle = '#b45309';
+        g.fillRect(bx + 6, by + 6, bw - 12, 22);
+        g.fillRect(bx + 6, by + 6, 22, bh - 12);
+        g.fillRect(bx + bw - 28, by + 6, 22, bh - 12);
+      } else if (bStyle === 'market' || bStyle === 'mall') {
+        // Glass Skylight Atrium & Steel Roof Ribbing
+        g.fillStyle = bStyle === 'mall' ? '#db2777' : '#d97706';
+        g.fillRect(bx, by, bw, bh);
         g.fillStyle = '#0f172a';
+        g.fillRect(bx + 10, by + 10, bw - 20, bh - 20);
+        g.fillStyle = bStyle === 'mall' ? '#38bdf8' : '#fef08a';
+        for (let sx = bx + 18; sx < bx + bw - 24; sx += 26) {
+          g.fillRect(sx, by + 16, 16, bh - 32);
+        }
+      } else if (bStyle === 'tower') {
+        // Sleek Blue Glass Skyscraper + Helipad
+        g.fillStyle = '#0c4a6e';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#0284c7';
+        g.fillRect(bx + 8, by + 8, bw - 16, bh - 16);
+        g.strokeStyle = '#38bdf8';
+        g.lineWidth = 2;
+        g.beginPath(); g.arc(cx, cy, 22, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = '#fde047';
+        g.font = 'bold 14px Inter, sans-serif';
+        g.textAlign = 'center';
+        g.fillText('H', cx, cy + 5);
+      } else if (bStyle === 'plaza') {
+        // Open Tiled Plaza with Central Glowing Fountain (hitbox only on fountain!)
+        g.fillStyle = '#64748b';
         g.fillRect(lotX + 12, lotY + 12, lotW - 24, lotH - 24);
-        g.fillStyle = color + '44';
-        g.fillRect(lotX + 20, lotY + 20, lotW - 40, lotH - 40);
+        g.fillStyle = '#0284c7';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#38bdf8';
+        g.beginPath(); g.arc(cx, cy, Math.min(bw, bh) * 0.34, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#e0f2fe';
+        g.beginPath(); g.arc(cx, cy, 10 + Math.sin(Date.now() * 0.008) * 3, 0, Math.PI * 2); g.fill();
+      } else if (bStyle === 'foodstreet') {
+        // Night Food Street Pavilion with Red Lanterns
+        g.fillStyle = '#7f1d1d';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#f97316';
+        g.fillRect(bx + 8, by + 8, bw - 16, bh - 16);
+        for (let lx = bx + 18; lx < bx + bw - 14; lx += 24) {
+          g.fillStyle = '#ef4444';
+          g.beginPath(); g.arc(lx, by + bh - 12, 6, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#fde047';
+          g.beginPath(); g.arc(lx, by + 14, 5, 0, Math.PI * 2); g.fill();
+        }
+      } else if (bStyle === 'station' || bStyle === 'airport') {
+        // Arched Transit Terminal Roof + Control Tower / Skylights
+        g.fillStyle = '#1e3a8a';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#60a5fa';
+        g.fillRect(bx + 10, by + 14, bw - 20, bh - 28);
+        g.fillStyle = '#f8fafc';
+        g.fillRect(bx + 20, cy - 10, bw - 40, 20);
+        g.fillStyle = '#facc15';
+        g.fillRect(bx + bw - 34, by + 8, 20, 20);
+      } else if (bStyle === 'camp') {
+        // Forest Campsite with Wooden Deck & Green Tents (hitbox only on tent!)
+        g.fillStyle = '#14532d';
+        g.fillRect(lotX + 8, lotY + 8, lotW - 16, lotH - 16);
+        g.fillStyle = '#84cc16';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#15803d';
+        g.beginPath(); g.moveTo(cx, by + 4); g.lineTo(bx + 6, by + bh - 4); g.lineTo(bx + bw - 6, by + bh - 4); g.closePath(); g.fill();
+      } else if (bStyle === 'resort' || bStyle === 'marina' || bStyle === 'beachbar') {
+        // Tropical Villa / Beach Bar with Turquoise Pool & Thatched Roof
+        g.fillStyle = '#fef3c7';
+        g.fillRect(lotX + 6, lotY + 6, lotW - 12, lotH - 12);
+        g.fillStyle = '#92400e';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = '#06b6d4';
+        g.fillRect(bx + 10, by + bh * 0.45, bw * 0.42, bh * 0.42);
+        g.fillStyle = bStyle === 'beachbar' ? '#22c55e' : '#f59e0b';
+        g.fillRect(bx + bw * 0.56, by + 12, bw * 0.36, bh - 24);
+      } else {
+        g.fillStyle = '#334155';
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = color + '66';
+        g.fillRect(bx + 8, by + 8, bw - 16, bh - 16);
       }
 
-      // Signboard on building roof
+      // Crisp Signboard
       g.fillStyle = 'rgba(9, 13, 22, 0.94)';
-      g.fillRect(lotX + 6, lotY + 6, lotW - 12, 24);
+      g.fillRect(lotX + 6, lotY + 5, lotW - 12, 22);
       g.strokeStyle = color;
       g.lineWidth = 1.5;
-      g.strokeRect(lotX + 6, lotY + 6, lotW - 12, 24);
-      g.font = 'bold 11px Inter, sans-serif';
+      g.strokeRect(lotX + 6, lotY + 5, lotW - 12, 22);
+      g.font = 'bold 10px Inter, sans-serif';
       g.textAlign = 'center';
       g.fillStyle = '#ffffff';
-      g.fillText(`${icon} ${name}`, lotX + lotW / 2, lotY + 22);
+      g.fillText(`${icon} ${name}`, lotX + lotW / 2, lotY + 20);
       g.restore();
     }
 
     function drawServiceStationLot(g, sz) {
       const { lotX, lotY, lotW, lotH, type, name, icon, color, x, y } = sz;
+      const rect = getShopBuildingRect(sz);
       g.save();
-      if (type !== 'clothing' && type !== 'milktea' && type !== 'fastfood') {
-        g.fillStyle = '#1e293b';
-        g.fillRect(lotX, lotY, lotW, lotH);
-        g.strokeStyle = color;
-        g.lineWidth = 3;
-        g.strokeRect(lotX, lotY, lotW, lotH);
 
-        g.fillStyle = 'rgba(15, 23, 42, 0.92)';
-        g.fillRect(lotX + 8, lotY + 6, lotW - 16, 22);
-        g.font = 'bold 11px Inter, sans-serif';
-        g.textAlign = 'center';
-        g.fillStyle = '#ffffff';
-        g.fillText(`${icon} ${name}`, lotX + lotW / 2, lotY + 21);
-      }
+      // Paved sidewalk courtyard & parking lines
+      g.fillStyle = '#334155';
+      g.fillRect(lotX, lotY, lotW, lotH);
+      g.fillStyle = '#1e293b';
+      g.fillRect(lotX + 4, lotY + 4, lotW - 8, lotH - 8);
+      g.strokeStyle = color + '99';
+      g.lineWidth = 2;
+      g.strokeRect(lotX, lotY, lotW, lotH);
 
-      if (isEnterableShopZone(sz)) {
+      if (isEnterableShopZone(sz) && rect) {
+        const { x: bx, y: by, w: bw, h: bh } = rect;
+        // Exact building shadow + solid building body (1:1 with solidStructures!)
+        g.fillStyle = 'rgba(0,0,0,0.45)';
+        g.fillRect(bx + 7, by + 7, bw, bh);
+
+        const wallCol = type === 'clothing' ? '#581c87' : type === 'milktea' ? '#831843' : type === 'fastfood' ? '#991b1b' : type === 'garage' ? '#1e293b' : '#7c2d12';
+        const roofCol = type === 'clothing' ? '#db2777' : type === 'milktea' ? '#f472b6' : type === 'fastfood' ? '#ef4444' : type === 'garage' ? '#eab308' : '#ea580c';
+        g.fillStyle = wallCol;
+        g.fillRect(bx, by, bw, bh);
+        g.fillStyle = roofCol;
+        g.fillRect(bx + 5, by + 5, bw - 10, bh - 18);
+
+        // Rooftop AC unit + skylights
+        g.fillStyle = '#94a3b8';
+        g.fillRect(bx + bw - 30, by + 12, 18, 14);
+        g.fillStyle = '#38bdf8';
+        g.fillRect(bx + 14, by + bh - 26, bw - 28, 12);
+
+        // Striped Awning along road-facing front
+        const frontY = sz.roadSide === 'top' ? by : (by + bh - 10);
+        for (let ax = bx + 8; ax < bx + bw - 12; ax += 16) {
+          g.fillStyle = ((ax / 16) % 2 === 0) ? '#ffffff' : roofCol;
+          g.fillRect(ax, frontY, 12, 10);
+        }
+
+        // Glass Double Door right at (sz.doorX, sz.doorY)
         const dx = sz.doorX || (lotX + lotW / 2);
         const dy = sz.doorY || y;
-        // Welcome mat + glass/wood door frame on street-facing side
-        const frameY = sz.roadSide === 'top' ? lotY + 24 : lotY + lotH - 34;
+        const doorFrameY = sz.roadSide === 'top' ? (by - 6) : (by + bh - 4);
         g.fillStyle = '#0f172a';
-        g.fillRect(dx - 24, frameY, 48, 12);
+        g.fillRect(dx - 24, doorFrameY, 48, 10);
         g.fillStyle = '#38bdf8';
-        g.fillRect(dx - 20, frameY + 2, 18, 8);
-        g.fillRect(dx + 2, frameY + 2, 18, 8);
-        g.fillStyle = color;
-        g.fillRect(dx - 26, sz.roadSide === 'top' ? lotY + 4 : lotY + lotH - 12, 52, 8);
+        g.fillRect(dx - 20, doorFrameY + 2, 18, 6);
+        g.fillRect(dx + 2, doorFrameY + 2, 18, 6);
 
-        const pulse = 22 + Math.sin(Date.now() * 0.006) * 4;
+        // Potted plants beside the door
+        g.fillStyle = '#22c55e';
+        g.beginPath(); g.arc(dx - 34, dy, 6, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(dx + 34, dy, 6, 0, Math.PI * 2); g.fill();
+
+        const pulse = 20 + Math.sin(Date.now() * 0.006) * 4;
         g.beginPath();
         g.arc(dx, dy, pulse, 0, Math.PI * 2);
-        g.fillStyle = color + '38';
+        g.fillStyle = color + '35';
         g.fill();
         g.lineWidth = 2.5;
         g.strokeStyle = color;
@@ -6932,17 +7226,49 @@
         g.font = 'bold 10px Inter, sans-serif';
         g.textAlign = 'center';
         g.fillStyle = '#fef08a';
-        g.fillText('🚪 CỬA [E]', dx, sz.roadSide === 'top' ? dy - 14 : dy + 22);
+        g.fillText('🚪 CỬA [E]', dx, sz.roadSide === 'top' ? dy - 10 : dy + 18);
+      } else if (type === 'gas' && rect) {
+        // Gas station canopy + fuel pumps + rear kiosk
+        g.fillStyle = '#dc2626';
+        g.fillRect(rect.x, rect.y, rect.w, rect.h);
+        g.fillStyle = '#f8fafc';
+        g.fillRect(rect.x + 8, rect.y + 8, rect.w - 16, rect.h - 16);
+        // 2 Fuel Pump Islands on the drive-up apron
+        const pumpY = sz.roadSide === 'top' ? (lotY + 34) : (lotY + lotH - 42);
+        g.fillStyle = '#ef4444';
+        g.fillRect(lotX + 44, pumpY, 26, 14);
+        g.fillRect(lotX + lotW - 70, pumpY, 26, 14);
+        g.fillStyle = '#fde047';
+        g.fillRect(lotX + 48, pumpY + 3, 18, 5);
+        g.fillRect(lotX + lotW - 66, pumpY + 3, 18, 5);
+        const pulse = 26 + Math.sin(Date.now() * 0.005) * 4;
+        g.beginPath(); g.arc(x, y, pulse, 0, Math.PI * 2);
+        g.fillStyle = color + '35'; g.fill();
+        g.lineWidth = 2.5; g.strokeStyle = color; g.stroke();
       } else {
-        const pulse = 28 + Math.sin(Date.now() * 0.005) * 4;
-        g.beginPath();
-        g.arc(x, y, pulse, 0, Math.PI * 2);
-        g.fillStyle = color + '35';
-        g.fill();
-        g.lineWidth = 2.5;
-        g.strokeStyle = color;
-        g.stroke();
+        // Beach rest canopy & loungers
+        g.fillStyle = '#fef3c7';
+        g.fillRect(lotX + 8, lotY + 8, lotW - 16, lotH - 16);
+        g.fillStyle = '#6366f1';
+        g.fillRect(lotX + 35, lotY + 40, 45, 75);
+        g.fillRect(lotX + 100, lotY + 40, 45, 75);
+        const pulse = 26 + Math.sin(Date.now() * 0.005) * 4;
+        g.beginPath(); g.arc(x, y, pulse, 0, Math.PI * 2);
+        g.fillStyle = color + '35'; g.fill();
+        g.lineWidth = 2.5; g.strokeStyle = color; g.stroke();
       }
+
+      // Signboard
+      const signY = sz.roadSide === 'top' ? (lotY + lotH - 25) : (lotY + 5);
+      g.fillStyle = 'rgba(15, 23, 42, 0.94)';
+      g.fillRect(lotX + 8, signY, lotW - 16, 20);
+      g.strokeStyle = color;
+      g.lineWidth = 1.5;
+      g.strokeRect(lotX + 8, signY, lotW - 16, 20);
+      g.font = 'bold 10px Inter, sans-serif';
+      g.textAlign = 'center';
+      g.fillStyle = '#ffffff';
+      g.fillText(`${icon} ${name}`, lotX + lotW / 2, signY + 14);
       g.restore();
     }
 
@@ -7033,6 +7359,18 @@
       } else {
         g.fillStyle = b.roof;
         g.fillRect(b.x + 6, b.y + 6, b.w - 12, b.h - 12);
+        g.strokeStyle = b.accent + '66';
+        g.lineWidth = 1.5;
+        g.strokeRect(b.x + 10, b.y + 10, b.w - 20, b.h - 20);
+        if (b.w >= 70 && b.h >= 70) {
+          // Rooftop stairwell penthouse + AC units + water tank
+          g.fillStyle = '#0f172a';
+          g.fillRect(b.x + 14, b.y + 14, 24, 18);
+          g.fillStyle = '#94a3b8';
+          g.fillRect(b.x + b.w - 28, b.y + 16, 14, 10);
+          g.fillStyle = '#38bdf8';
+          g.beginPath(); g.arc(b.x + b.w - 22, b.y + b.h - 22, 6, 0, Math.PI * 2); g.fill();
+        }
       }
 
       if (gfx !== 'low') {
@@ -7040,6 +7378,10 @@
         for (let wx = b.x + 14; wx < b.x + b.w - 18; wx += 22) {
           g.fillRect(wx, b.y + 3, 8, 3);
           g.fillRect(wx, b.y + b.h - 6, 8, 3);
+        }
+        for (let wy = b.y + 14; wy < b.y + b.h - 18; wy += 22) {
+          g.fillRect(b.x + 3, wy, 3, 8);
+          g.fillRect(b.x + b.w - 6, wy, 3, 8);
         }
       }
     }
@@ -8083,6 +8425,8 @@
 
         if (e.code === 'Escape') {
           e.preventDefault();
+          const sm = document.getElementById('shopMenuModal');
+          if (sm && !sm.classList.contains('hidden')) { closeShopMenuModal(); return; }
           const wm = document.getElementById('wardrobeMenuModal');
           if (wm && !wm.classList.contains('hidden')) { closeWardrobeMenuModal(); return; }
           state.menuOpen = !state.menuOpen;
@@ -8203,6 +8547,7 @@
       document.getElementById('btnDialerBackspace').addEventListener('click', dialerBackspace);
       document.getElementById('btnDialerCall').addEventListener('click', dialerStartCall);
       document.getElementById('btnDialerHangup').addEventListener('click', () => dialerHangup(false));
+      document.getElementById('btnCloseShopMenu').addEventListener('click', closeShopMenuModal);
 
       // Date Ride & Calendar Buttons (Ý 1 & Weekend Date)
       document.getElementById('btnPersuadeChangeSpot').addEventListener('click', () => {
